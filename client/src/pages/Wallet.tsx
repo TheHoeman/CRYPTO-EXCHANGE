@@ -167,7 +167,7 @@ export default function Wallet() {
 
   const resetMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/wallet/reset", { sandbox: true });
+      const response = await apiRequest("POST", "/api/sandbox/reset", {});
       return response.json();
     },
     onSuccess: () => {
