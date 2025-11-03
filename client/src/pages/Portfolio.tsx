@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import SandboxBanner from "@/components/SandboxBanner";
 import StatCard from "@/components/StatCard";
@@ -10,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Wallet, TrendingUp, Activity } from "lucide-react";
 import { usePrices } from "@/hooks/usePrices";
 import { useWallets } from "@/hooks/useWallets";
+import { fetchWithAuth } from "@/lib/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function Portfolio() {
@@ -19,6 +21,11 @@ export default function Portfolio() {
 
   const { data: pricesData, isLoading: pricesLoading, error: pricesError } = usePrices();
   const { data: walletsData, isLoading: walletsLoading, error: walletsError } = useWallets(sandboxMode);
+  
+  const { data: portfolioHistory, isLoading: historyLoading } = useQuery<{ history: Array<{ date: string; value: number }> }>({
+    queryKey: ["/api/portfolio/history", selectedTimeRange, sandboxMode],
+    queryFn: () => fetchWithAuth(`/api/portfolio/history?range=${selectedTimeRange}&sandbox=${sandboxMode}`),
+  });
 
   const portfolioStats = useMemo(() => {
     if (!pricesData || !walletsData?.wallets) {
@@ -83,36 +90,17 @@ export default function Portfolio() {
   }, [pricesData, walletsData]);
 
   const chartData = useMemo(() => {
-    const dataPoints: { [key: string]: number } = {
-      "7d": 7,
-      "30d": 30,
-      "90d": 90,
-      "1y": 365,
-    };
-    
-    const points = dataPoints[selectedTimeRange];
-    const currentValue = portfolioStats.totalValue;
-    const data = [];
-    
-    for (let i = points; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      
-      const volatility = 0.02;
-      const randomChange = (Math.random() - 0.5) * volatility;
-      const growthFactor = 1 + (1 - i / points) * 0.1;
-      const value = currentValue * (growthFactor + randomChange);
-      
-      data.push({
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        value: Math.max(0, value),
-      });
+    if (!portfolioHistory?.history) {
+      return [];
     }
     
-    return data;
-  }, [selectedTimeRange, portfolioStats.totalValue]);
+    return portfolioHistory.history.map(point => ({
+      date: new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: point.value,
+    }));
+  }, [portfolioHistory]);
 
-  const isLoading = pricesLoading || walletsLoading;
+  const isLoading = pricesLoading || walletsLoading || historyLoading;
   const hasError = pricesError || walletsError;
 
   return (
@@ -241,42 +229,52 @@ export default function Portfolio() {
             <CardContent>
               {isLoading ? (
                 <Skeleton className="h-80" data-testid="skeleton-chart" />
-              ) : portfolioStats.totalValue > 0 ? (
-                <div className="h-80" data-testid="portfolio-chart">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis 
-                        dataKey="date" 
-                        className="text-xs"
-                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                      />
-                      <YAxis 
-                        className="text-xs"
-                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                        tickFormatter={(value) => `$${value.toLocaleString()}`}
-                      />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: 'hsl(var(--popover))',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: '6px',
-                        }}
-                        formatter={(value: number) => [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="value" 
-                        stroke="hsl(var(--primary))" 
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+              ) : portfolioStats.totalValue > 0 && chartData.length > 0 ? (
+                <div className="space-y-4" data-testid="portfolio-chart">
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis 
+                          dataKey="date" 
+                          className="text-xs"
+                          tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                        />
+                        <YAxis 
+                          className="text-xs"
+                          tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                          tickFormatter={(value) => `$${value.toLocaleString()}`}
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--popover))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '6px',
+                          }}
+                          formatter={(value: number) => [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="value" 
+                          stroke="hsl(var(--primary))" 
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="text-xs text-muted-foreground text-center px-4 py-2 bg-muted/30 rounded-md">
+                    <p className="font-medium">📊 Portfolio Trend Analysis</p>
+                    <p className="mt-1">Chart shows estimated portfolio value progression based on current holdings. Start trading to build your complete performance history!</p>
+                  </div>
                 </div>
               ) : (
-                <div className="h-80 flex items-center justify-center text-muted-foreground" data-testid="chart-placeholder">
-                  No portfolio data to display
+                <div className="h-80 flex flex-col items-center justify-center text-center px-6" data-testid="chart-placeholder">
+                  <div className="text-muted-foreground mb-2 text-lg">📈</div>
+                  <p className="text-muted-foreground font-medium mb-1">No Trading History Yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    Make your first trade to start tracking your portfolio value over time
+                  </p>
                 </div>
               )}
             </CardContent>

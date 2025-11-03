@@ -463,6 +463,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/portfolio/history", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { range = "7d", sandbox } = req.query;
+      const isSandbox = sandbox === "true";
+      
+      const rangeMap: { [key: string]: number } = {
+        "7d": 7,
+        "30d": 30,
+        "90d": 90,
+        "1y": 365,
+      };
+      
+      const days = rangeMap[range as string] || 7;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      const userTransactions = await db.select()
+        .from(transactions)
+        .where(and(
+          eq(transactions.userId, req.user!.userId),
+          eq(transactions.isSandbox, isSandbox)
+        ))
+        .orderBy(transactions.createdAt);
+
+      const walletTable = isSandbox ? sandboxWallets : wallets;
+      const currentWallets = await db.select()
+        .from(walletTable)
+        .where(eq(walletTable.userId, req.user!.userId));
+
+      const prices = getCachedPrices();
+      
+      const btcWallet = currentWallets.find(w => w.currency === "BTC");
+      const ethWallet = currentWallets.find(w => w.currency === "ETH");
+      const usdWallet = currentWallets.find(w => w.currency === "USD");
+      
+      const currentBtcValue = btcWallet ? parseFloat(btcWallet.balance) * prices.btc : 0;
+      const currentEthValue = ethWallet ? parseFloat(ethWallet.balance) * prices.eth : 0;
+      const currentUsdValue = usdWallet ? parseFloat(usdWallet.balance) : 0;
+      const currentTotalValue = currentBtcValue + currentEthValue + currentUsdValue;
+
+      const dataPoints = [];
+      const startingValue = 10000;
+
+      if (userTransactions.length === 0) {
+        for (let i = 0; i <= days; i++) {
+          const date = new Date(startDate);
+          date.setDate(date.getDate() + i);
+          dataPoints.push({
+            date: date.toISOString(),
+            value: i === days ? currentTotalValue : startingValue,
+          });
+        }
+      } else {
+        const firstTxDate = new Date(userTransactions[0].createdAt);
+        const daysSinceFirstTx = Math.ceil((new Date().getTime() - firstTxDate.getTime()) / (1000 * 60 * 60 * 24));
+        const relevantDays = Math.min(days, daysSinceFirstTx);
+        
+        for (let i = 0; i <= relevantDays; i++) {
+          const date = new Date();
+          date.setDate(date.getDate() - (relevantDays - i));
+          
+          const progress = i / relevantDays;
+          const interpolatedValue = startingValue + (currentTotalValue - startingValue) * progress;
+          
+          dataPoints.push({
+            date: date.toISOString(),
+            value: interpolatedValue,
+          });
+        }
+      }
+
+      res.json({ history: dataPoints });
+    } catch (error) {
+      console.error("Get portfolio history error:", error);
+      res.status(500).json({ error: "Failed to get portfolio history" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
