@@ -11,6 +11,8 @@ interface BuySellFormProps {
   currentPrice: number;
   balance: number;
   cryptoBalance: number;
+  onSubmit: (orderType: "BUY" | "SELL", currency: "BTC" | "ETH", amount: string, price: number) => void;
+  isSubmitting?: boolean;
 }
 
 export default function BuySellForm({ 
@@ -18,7 +20,9 @@ export default function BuySellForm({
   symbol, 
   currentPrice, 
   balance, 
-  cryptoBalance 
+  cryptoBalance,
+  onSubmit,
+  isSubmitting = false
 }: BuySellFormProps) {
   const [buyAmount, setBuyAmount] = useState("");
   const [sellAmount, setSellAmount] = useState("");
@@ -27,13 +31,17 @@ export default function BuySellForm({
   const sellTotal = parseFloat(sellAmount || "0") * currentPrice;
 
   const handleBuy = () => {
-    console.log(`Buy ${buyAmount} ${symbol} at $${currentPrice}`);
-    setBuyAmount("");
+    if (buyAmount && parseFloat(buyAmount) > 0) {
+      onSubmit("BUY", symbol as "BTC" | "ETH", buyAmount, currentPrice);
+      setBuyAmount("");
+    }
   };
 
   const handleSell = () => {
-    console.log(`Sell ${sellAmount} ${symbol} at $${currentPrice}`);
-    setSellAmount("");
+    if (sellAmount && parseFloat(sellAmount) > 0) {
+      onSubmit("SELL", symbol as "BTC" | "ETH", sellAmount, currentPrice);
+      setSellAmount("");
+    }
   };
 
   return (
@@ -62,6 +70,7 @@ export default function BuySellForm({
                 onChange={(e) => setBuyAmount(e.target.value)}
                 className="font-mono"
                 data-testid="input-buy-amount"
+                disabled={isSubmitting}
               />
             </div>
             
@@ -83,10 +92,10 @@ export default function BuySellForm({
               className="w-full" 
               size="lg"
               onClick={handleBuy}
-              disabled={!buyAmount || parseFloat(buyAmount) <= 0 || buyTotal > balance}
+              disabled={!buyAmount || parseFloat(buyAmount) <= 0 || buyTotal > balance || isSubmitting}
               data-testid="button-buy"
             >
-              Buy {symbol}
+              {isSubmitting ? "Submitting..." : `Buy ${symbol}`}
             </Button>
           </TabsContent>
           
@@ -104,6 +113,7 @@ export default function BuySellForm({
                 onChange={(e) => setSellAmount(e.target.value)}
                 className="font-mono"
                 data-testid="input-sell-amount"
+                disabled={isSubmitting}
               />
             </div>
             
@@ -126,10 +136,10 @@ export default function BuySellForm({
               size="lg"
               variant="destructive"
               onClick={handleSell}
-              disabled={!sellAmount || parseFloat(sellAmount) <= 0 || parseFloat(sellAmount) > cryptoBalance}
+              disabled={!sellAmount || parseFloat(sellAmount) <= 0 || parseFloat(sellAmount) > cryptoBalance || isSubmitting}
               data-testid="button-sell"
             >
-              Sell {symbol}
+              {isSubmitting ? "Submitting..." : `Sell ${symbol}`}
             </Button>
           </TabsContent>
         </Tabs>

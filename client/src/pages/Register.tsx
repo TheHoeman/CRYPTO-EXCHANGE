@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Bitcoin } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Register() {
   const [, setLocation] = useLocation();
@@ -12,15 +14,36 @@ export default function Register() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const { register } = useAuth();
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (password !== confirmPassword) {
-      console.log("Passwords don't match");
+      toast({
+        title: "Password mismatch",
+        description: "Passwords don't match",
+        variant: "destructive",
+      });
       return;
     }
-    console.log("Register attempt:", { email, username, password });
-    setLocation("/dashboard");
+    
+    setIsLoading(true);
+    
+    try {
+      await register(email, username, password);
+      setLocation("/dashboard");
+    } catch (error) {
+      toast({
+        title: "Registration failed",
+        description: error instanceof Error ? error.message : "Could not create account",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -94,17 +117,15 @@ export default function Register() {
                   data-testid="input-confirm-password"
                 />
               </div>
-              <Button type="submit" className="w-full" size="lg" data-testid="button-register">
-                Create Account
+              <Button type="submit" className="w-full" size="lg" data-testid="button-register" disabled={isLoading}>
+                {isLoading ? "Creating Account..." : "Create Account"}
               </Button>
             </form>
             
             <div className="mt-4 text-center text-sm">
               <span className="text-muted-foreground">Already have an account? </span>
-              <Link href="/login">
-                <a className="text-primary hover:underline font-semibold" data-testid="link-login">
-                  Login
-                </a>
+              <Link href="/login" className="text-primary hover:underline font-semibold" data-testid="link-login">
+                Login
               </Link>
             </div>
           </CardContent>

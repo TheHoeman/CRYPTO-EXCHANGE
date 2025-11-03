@@ -1,11 +1,18 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Bitcoin, Menu, X } from "lucide-react";
+import { Bitcoin, Menu, X, LogOut } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/lib/auth";
 
 export default function Navbar() {
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = "/";
+  };
 
   const navLinks = [
     { path: "/", label: "Home" },
@@ -41,16 +48,29 @@ export default function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-2">
-            <Link href="/login">
-              <Button variant="ghost" size="sm" data-testid="button-login">
-                Login
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button size="sm" data-testid="button-register">
-                Get Started
-              </Button>
-            </Link>
+            {user ? (
+              <>
+                <span className="text-sm text-muted-foreground" data-testid="text-username">
+                  {user.username}
+                </span>
+                <Button variant="ghost" size="icon" onClick={handleLogout} data-testid="button-logout">
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="ghost" size="sm" data-testid="button-login">
+                    Login
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button size="sm" data-testid="button-register">
+                    Get Started
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           <Button
@@ -81,16 +101,24 @@ export default function Navbar() {
               </Link>
             ))}
             <div className="flex gap-2 mt-2">
-              <Link href="/login" className="flex-1">
-                <Button variant="outline" className="w-full" data-testid="mobile-button-login">
-                  Login
+              {user ? (
+                <Button variant="outline" className="w-full" onClick={handleLogout} data-testid="mobile-button-logout">
+                  Logout ({user.username})
                 </Button>
-              </Link>
-              <Link href="/register" className="flex-1">
-                <Button className="w-full" data-testid="mobile-button-register">
-                  Get Started
-                </Button>
-              </Link>
+              ) : (
+                <>
+                  <Link href="/login" className="flex-1">
+                    <Button variant="outline" className="w-full" data-testid="mobile-button-login">
+                      Login
+                    </Button>
+                  </Link>
+                  <Link href="/register" className="flex-1">
+                    <Button className="w-full" data-testid="mobile-button-register">
+                      Get Started
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

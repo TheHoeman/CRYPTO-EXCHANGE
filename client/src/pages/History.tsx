@@ -1,20 +1,81 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
+import SandboxBanner from "@/components/SandboxBanner";
 import TransactionTable from "@/components/TransactionTable";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download, Filter } from "lucide-react";
+import { fetchWithAuth } from "@/lib/api";
+
+interface Transaction {
+  id: string;
+  type: "BUY" | "SELL";
+  currency: string;
+  amount: number;
+  price: number;
+  total: number;
+  createdAt: string;
+}
+
+interface TransactionHistoryResponse {
+  transactions: Transaction[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalPages: number;
+    totalCount: number;
+  };
+}
 
 export default function History() {
-  const mockTransactions = [
-    { id: "1", type: "BUY" as const, currency: "BTC", amount: 0.05, price: 67842.50, total: 3392.13, date: "2025-11-03 14:32", status: "COMPLETED" as const },
-    { id: "2", type: "SELL" as const, currency: "ETH", amount: 0.5, price: 3524.18, total: 1762.09, date: "2025-11-03 12:15", status: "COMPLETED" as const },
-    { id: "3", type: "BUY" as const, currency: "ETH", amount: 1.0, price: 3500.00, total: 3500.00, date: "2025-11-02 09:45", status: "COMPLETED" as const },
-    { id: "4", type: "BUY" as const, currency: "BTC", amount: 0.1, price: 66500.00, total: 6650.00, date: "2025-11-01 16:20", status: "COMPLETED" as const },
-    { id: "5", type: "SELL" as const, currency: "BTC", amount: 0.02, price: 67000.00, total: 1340.00, date: "2025-10-31 11:45", status: "COMPLETED" as const },
-  ];
+  const [sandboxMode, setSandboxMode] = useState(false);
+  const [showBanner, setShowBanner] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currencyFilter, setCurrencyFilter] = useState<string>("all");
+
+  const { data, isLoading, error } = useQuery<TransactionHistoryResponse>({
+    queryKey: ['/api/transactions/history', currentPage, sandboxMode, currencyFilter],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: "10",
+        sandbox: sandboxMode.toString(),
+      });
+      
+      if (currencyFilter !== "all") {
+        params.append("currency", currencyFilter);
+      }
+      
+      return fetchWithAuth(`/api/transactions/history?${params.toString()}`);
+    },
+  });
+
+  const formattedTransactions = data?.transactions.map(tx => ({
+    ...tx,
+    date: new Date(tx.createdAt).toLocaleString('en-US', { 
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }),
+    status: "COMPLETED" as const,
+  })) || [];
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      {sandboxMode && showBanner && <SandboxBanner onDismiss={() => setShowBanner(false)} />}
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
@@ -23,18 +84,74 @@ export default function History() {
             <p className="text-muted-foreground mt-1">View all your trading activity</p>
           </div>
           
-          <Button variant="outline" data-testid="button-export">
+          <div className="flex items-center gap-3">
+            <Label htmlFor="sandbox-mode" className="text-sm font-medium">Sandbox Mode</Label>
+            <Switch
+              id="sandbox-mode"
+              checked={sandboxMode}
+              onCheckedChange={(checked) => {
+                setSandboxMode(checked);
+                setShowBanner(true);
+                setCurrentPage(1);
+              }}
+              data-testid="switch-sandbox"
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-md text-destructive" data-testid="error-message">
+            <p className="font-semibold">Error loading transaction history</p>
+            <p className="text-sm">
+              {error instanceof Error ? error.message : 'Failed to load transactions. Please try again later.'}
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Label htmlFor="currency-filter" className="text-sm font-medium">Filter by currency:</Label>
+          </div>
+          <Select value={currencyFilter} onValueChange={(value) => {
+            setCurrencyFilter(value);
+            setCurrentPage(1);
+          }}>
+            <SelectTrigger className="w-40" id="currency-filter" data-testid="select-currency-filter">
+              <SelectValue placeholder="All currencies" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" data-testid="option-all">All</SelectItem>
+              <SelectItem value="BTC" data-testid="option-btc">BTC</SelectItem>
+              <SelectItem value="ETH" data-testid="option-eth">ETH</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Button variant="outline" className="ml-auto" data-testid="button-export">
             <Download className="h-4 w-4 mr-2" />
             Export CSV
           </Button>
         </div>
 
-        <TransactionTable
-          transactions={mockTransactions}
-          currentPage={1}
-          totalPages={3}
-          onPageChange={(page) => console.log('Go to page:', page)}
-        />
+        {isLoading ? (
+          <Card data-testid="skeleton-transactions">
+            <CardContent className="p-6">
+              <Skeleton className="h-12 mb-4" />
+              <Skeleton className="h-16 mb-3" />
+              <Skeleton className="h-16 mb-3" />
+              <Skeleton className="h-16 mb-3" />
+              <Skeleton className="h-16 mb-3" />
+              <Skeleton className="h-16" />
+            </CardContent>
+          </Card>
+        ) : (
+          <TransactionTable
+            transactions={formattedTransactions}
+            currentPage={data?.pagination.page || 1}
+            totalPages={data?.pagination.totalPages || 1}
+            onPageChange={handlePageChange}
+          />
+        )}
       </div>
     </div>
   );

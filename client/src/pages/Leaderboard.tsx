@@ -1,18 +1,38 @@
+import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import LeaderboardTable from "@/components/LeaderboardTable";
 import StatCard from "@/components/StatCard";
-import { Users, TrendingUp, Award } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Users, TrendingUp, Award, AlertCircle } from "lucide-react";
+
+interface LeaderboardEntry {
+  id: number;
+  rank: number;
+  username: string;
+  totalTrades: number;
+  winRate: string;
+  profitLoss: number;
+  profitPercent: string;
+}
 
 export default function Leaderboard() {
-  const mockTraders = [
-    { id: "1", rank: 1, username: "CryptoKing", totalTrades: 247, winRate: 78.5, profitLoss: 15420.50, profitPercent: 154.2 },
-    { id: "2", rank: 2, username: "TraderPro", totalTrades: 189, winRate: 72.1, profitLoss: 12350.80, profitPercent: 123.5 },
-    { id: "3", rank: 3, username: "BullRunner", totalTrades: 156, winRate: 68.9, profitLoss: 9870.25, profitPercent: 98.7 },
-    { id: "4", rank: 4, username: "DiamondHands", totalTrades: 134, winRate: 65.7, profitLoss: 7650.00, profitPercent: 76.5 },
-    { id: "5", rank: 5, username: "MoonShot", totalTrades: 98, winRate: 62.3, profitLoss: 5420.90, profitPercent: 54.2 },
-    { id: "6", rank: 6, username: "HODLMaster", totalTrades: 87, winRate: 59.8, profitLoss: 4230.15, profitPercent: 42.3 },
-    { id: "7", rank: 7, username: "WhaleWatcher", totalTrades: 76, winRate: 57.2, profitLoss: 3450.60, profitPercent: 34.5 },
-  ];
+  const { data, isLoading, error } = useQuery<{ leaderboard: LeaderboardEntry[] }>({
+    queryKey: ["/api/leaderboard"],
+  });
+
+  const traders = data?.leaderboard.map(trader => ({
+    ...trader,
+    id: trader.id.toString(),
+    winRate: parseFloat(trader.winRate),
+    profitPercent: parseFloat(trader.profitPercent),
+  })) || [];
+
+  const activeTraders = traders.length;
+  const avgWinRate = traders.length > 0
+    ? (traders.reduce((sum, t) => sum + t.winRate, 0) / traders.length).toFixed(1)
+    : "0.0";
+  const topTraderGain = traders.length > 0 ? traders[0].profitPercent.toFixed(2) : "0.00";
 
   return (
     <div className="min-h-screen bg-background">
@@ -24,30 +44,64 @@ export default function Leaderboard() {
           <p className="text-muted-foreground mt-1">Top performing traders on the platform</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <StatCard
-            title="Active Traders"
-            value="1,247"
-            icon={Users}
-          />
-          <StatCard
-            title="Avg. Win Rate"
-            value="64.2%"
-            change="+2.1%"
-            changeType="positive"
-            icon={TrendingUp}
-          />
-          <StatCard
-            title="Top Trader Gain"
-            value="+154.2%"
-            icon={Award}
-          />
-        </div>
+        {isLoading ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <Skeleton className="h-32" data-testid="skeleton-stat-1" />
+              <Skeleton className="h-32" data-testid="skeleton-stat-2" />
+              <Skeleton className="h-32" data-testid="skeleton-stat-3" />
+            </div>
+            <Card data-testid="skeleton-leaderboard">
+              <CardHeader>
+                <CardTitle>Top Traders</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} className="h-16" data-testid={`skeleton-row-${i}`} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        ) : error ? (
+          <Card data-testid="error-leaderboard">
+            <CardContent className="pt-6">
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Failed to Load Leaderboard</h3>
+                <p className="text-sm text-muted-foreground">
+                  {error instanceof Error ? error.message : "Unable to fetch leaderboard data. Please try again later."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <StatCard
+                title="Active Traders"
+                value={activeTraders.toLocaleString()}
+                icon={Users}
+              />
+              <StatCard
+                title="Avg. Win Rate"
+                value={`${avgWinRate}%`}
+                icon={TrendingUp}
+              />
+              <StatCard
+                title="Top Trader Gain"
+                value={`+${topTraderGain}%`}
+                icon={Award}
+              />
+            </div>
 
-        <LeaderboardTable
-          traders={mockTraders}
-          onCopyTrade={(id) => console.log('View trades for trader:', id)}
-        />
+            <LeaderboardTable
+              traders={traders}
+              onCopyTrade={(id) => console.log('View trades for trader:', id)}
+            />
+          </>
+        )}
       </div>
     </div>
   );
