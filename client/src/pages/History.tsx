@@ -72,6 +72,46 @@ export default function History() {
     setCurrentPage(page);
   };
 
+  const handleExportCSV = () => {
+    if (!data?.transactions || data.transactions.length === 0) {
+      return;
+    }
+
+    const headers = ['Date', 'Type', 'Currency', 'Amount', 'Price', 'Total'];
+    const csvRows = [headers.join(',')];
+
+    data.transactions.forEach(tx => {
+      const row = [
+        new Date(tx.createdAt).toLocaleString('en-US', { 
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }),
+        tx.type,
+        tx.currency,
+        tx.amount,
+        `$${tx.price}`,
+        `$${tx.total}`
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `transactions_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -127,7 +167,13 @@ export default function History() {
             </SelectContent>
           </Select>
           
-          <Button variant="outline" className="ml-auto" data-testid="button-export">
+          <Button 
+            variant="outline" 
+            className="ml-auto" 
+            onClick={handleExportCSV}
+            disabled={!data?.transactions || data.transactions.length === 0}
+            data-testid="button-export"
+          >
             <Download className="h-4 w-4 mr-2" />
             Export CSV
           </Button>
